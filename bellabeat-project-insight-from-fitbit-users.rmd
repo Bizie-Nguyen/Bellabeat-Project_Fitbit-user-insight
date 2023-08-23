@@ -1,4 +1,3 @@
-# %% [code]
 ---
 title: \vspace{3.5in} "Bellabeat Project - Insight from FitBit's users and how to apply to Bellabeat's product"
 author: "Duc Nguyen"
