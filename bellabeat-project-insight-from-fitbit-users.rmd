@@ -1,0 +1,363 @@
+# %% [code]
+---
+title: \vspace{3.5in} "Bellabeat Project - Insight from FitBit's users and how to apply to Bellabeat's product"
+author: "Duc Nguyen"
+date: "2023-08-20"
+output: 
+  html_document:
+    number_sections: true
+    toc: true
+    toc_depth: 3
+    theme: readable
+---
+
+
+# Business task 
+The main business task is to analyze the trend of customer smart device usage, particularly focusing on Fitbit and other related datasets.
+This analysis aims to understand how this trend can impact Bellabeat products and provide valuable insights to the company.
+The key objective is to identify consumer behavior patterns and preferences related to Bellabeat products, utilizing the gathered insights to enhance a specific Bellabeat product that shares similar attributes.
+Urska Srsen, the co-founder and Chief Creative Officer of Bellabeat, is a key stakeholder in this initiative.
+
+# Data Source 
+* [FitBit Fitness Tracker Data](https://www.kaggle.com/datasets/arashnic/fitbit/code) - This Kaggle data set contains personal fitness tracker from thirty Fitbit users. Thirty eligible Fitbit's users consented to the submission of personal tracker data, including minute-level output for physical activity, heart rate, and sleep monitoring. It includes information about daily activity, steps, and heart rate that can be used to explore users’ habits. Srsen tells you that this data set might have some limitations, and encourages you to consider adding another data to help address those limitations as you begin to work more with this data.
+
+# Data Processing
+Firstly, lets load all packages that we will need for the task
+```{r}
+library(tidyverse)
+library(readr)
+library(janitor)
+library(dplyr)
+library(lubridate)
+```
+
+## Importing Data
+Before importing, I noticed the data was reported in daily, hourly, and minute, and each individual who join in the survey has their own weight log, so my idea was to create new 3 dataset showing separately daily, hourly and minute activiy, calories, sleep and intensities with customer ID as primary key.
+
+It will Take sometimes to understand each dataset
+
+### Daily activity
+```{r}
+daily_activity <- read_csv('/kaggle/input/fitbit/Fitabase Data 4.12.16-5.12.16/dailyActivity_merged.csv')
+glimpse(daily_activity)
+max(daily_activity$ActivityDate)
+min(daily_activity$ActivityDate)
+```
+
+We know that 'daily_activity' has 15 columns and 940 rows, the column can be used for later are Id, ActivityDate, TotalSteps, TotalDistance, and Calories, with the first record date on April 12 2016, and the last day was on May 09 2016
+
+### Daily calories
+```{r}
+daily_calories <- read_csv('/kaggle/input/fitbit/Fitabase Data 4.12.16-5.12.16/dailyCalories_merged.csv')
+glimpse(daily_calories)
+min(daily_calories$ActivityDay)
+max(daily_calories$ActivityDay)
+```
+
+Similarly, this table has 940 rows from the same 30 people, with calories column return the same result from daily_activity
+
+### Daily intensity
+```{r}
+daily_intensity <- read_csv('/kaggle/input/fitbit/Fitabase Data 4.12.16-5.12.16/dailyIntensities_merged.csv')
+glimpse(daily_intensity)
+min(daily_intensity$ActivityDay)
+max(daily_intensity$ActivityDay)
+```
+
+Luckily, same result returned, with number of rows and date
+
+### Daily steps
+```{r}
+daily_steps <- read_csv('/kaggle/input/fitbit/Fitabase Data 4.12.16-5.12.16/dailySteps_merged.csv')
+glimpse(daily_steps)
+min(daily_steps$ActivityDay)
+max(daily_steps$ActivityDay)
+```
+
+
+### Daily sleep
+```{r}
+daily_sleep <- read_csv('/kaggle/input/fitbit/Fitabase Data 4.12.16-5.12.16/sleepDay_merged.csv')
+glimpse(daily_sleep)
+min(daily_sleep$SleepDay)
+max(daily_sleep$SleepDay)
+```
+
+### Customer weight
+```{r}
+customer_weight <- read_csv('/kaggle/input/fitbit/Fitabase Data 4.12.16-5.12.16/weightLogInfo_merged.csv')
+glimpse(customer_weight)
+min(customer_weight$Date)
+max(customer_weight$Date)
+```
+
+## Finanlize processing data
+I noticed, the data in daily_activity seem like already including the result from daily_calories, daily_intensity, and daily_steps, missing daily sleep, and customer health information.
+
+I would like to validate the data in daily_activity is identical with data from daily_calories and daily_intensity data frame.
+```{r}
+identical(daily_activity$Calories, daily_calories$Calories)
+identical(daily_activity$TotalSteps,daily_steps$StepTotal)
+```
+
+TRUE is good.
+
+My plan was that I would like to see the relationship between customer's health and calories, steps, and sleep. From there, we also can see, how often the data was recorded for each individual, and know how often they use smart device to track their health, and will be able to see whether any relationship between smart device consumption with user's health.
+However, after running a couple more tests (below), I see that although everyone joint in the survey, allowing Fitbit to track and analyze their activities, but only 8 of them disclosed or record their weight, and 24 got their sleep recorded. So, I will have to do 3 separate analysis. The first one for all 33 individual but only from daily activity. The second one will find the relationship between body weight with smart devices to track their health indicator. Lastly, using the sleeping analysis to find out days that customer most active to firgure the best time to run promotions.
+
+```{r}
+length(unique(customer_weight$Id))
+length(unique(daily_sleep$Id))
+length(unique(daily_calories$Id))
+length(unique(daily_intensity$Id))
+length(unique(daily_steps$Id))
+```
+
+# Analyzing
+## Analysis 1: Smart device usage on 'daily_activity'
+### Most active weekday
+From daily_activity data frame, I would like to know, which day in the week is the most active.
+
+To do this, I get a new data frame from column ActivityDate in daily_activity:
+
+```{r}
+activity_date <- daily_activity %>% 
+  select(ActivityDate)
+```
+
+Since this column data type is incorrect, I need to convert from character to date:
+
+```{r}
+activity_date$ActivityDate <- ymd(activity_date$ActivityDate)
+```
+
+Then add a new column to show which day in the week
+
+```{r}
+activity_date <- activity_date %>% 
+  mutate(day_of_the_week = weekdays(ActivityDate))
+```
+
+Finally, with ggplot2, this is what we have
+
+```{r}
+ggplot(data = activity_date) + 
+  geom_bar(aes(x = day_of_the_week), fill = "lightblue") + 
+  labs(title = "Usage in different days in a week", x = "Weekday", y = "Usage recorded") + 
+  theme_minimal()
+```
+
+
+Unlike what I thought in beginning, the customer actually most active on Thursday, Tuesday and Wednesday.
+
+### Relationship between number of steps and calories
+First, I would like to know if the distance data was recorded correctly
+```{r}
+identical(daily_activity$TotalDistance, daily_activity$TrackerDistance)
+mean(daily_activity$TotalDistance)
+mean(daily_activity$TrackerDistance)
+```
+The result is FALSE, but the difference in average distance is not big, so the recorded result is acceptable.
+
+Common sense would be the more you excercise, the more calories you would burn, however, based on the data, the result is slightly different
+```{r}
+ggplot(data = daily_activity) + geom_point(aes(x = TotalSteps, y = Calories)) + labs(title = "Relationship between number of steps and calories burned", x = "Number of steps")
+```
+
+
+As from the scatter plot, the thinking that "the more step you walk, the better result in calories burning" is only true up to between 20,000 - 30,000 steps, in another word, smart device that has main function for exercising, not only should focus on that, but also need to have good design. As, most people do not spend most of their time on just exercising, but also taking it on their daily life activities, for example: hanging out, shopping, etc. Even if they are really into practicing, they can maximize the outcome at around 20,000 - 30,000 steps, and Bellabeat can use this information to advertise their product.
+
+### Main user types
+Because the daily activities is too long, I find it hard to find connections for analysis, and I know there are only 33 people activity were recorded (33 distinct Ids), I decided to make a summary data frame.
+
+```{r}
+summary_daily_activity <- daily_activity %>% 
+  select(-ActivityDate) %>% 
+  group_by(Id) %>% 
+  summarize(across(2:13, sum))
+view(summary_daily_activity)
+```
+
+Now, it's easier to see. Noticing the total distance is the total of light, moderate, sedentary, and very active distance, in another word, if we know the distribution, we can find out how the user use the device mostly, or where the majority of calories burned come from.
+
+However, the distance type is in columns right now, and to make a pie chart in R, it's better to convert into long data type.
+```{r}
+daily_long <- summary_daily_activity %>% 
+  select(VeryActiveDistance, ModeratelyActiveDistance, LightActiveDistance, SedentaryActiveDistance) %>% 
+  pivot_longer(cols = c(VeryActiveDistance, ModeratelyActiveDistance, LightActiveDistance, SedentaryActiveDistance), names_to = "Category", values_to = "Value")
+
+view(daily_long)
+```
+
+Now we need to group the data in different categories
+
+```{r}
+user_category <- daily_long %>%
+  group_by(Category) %>%
+  summarize(Total_Value = sum(Value)) %>% 
+  mutate(Percentage = Total_Value / sum(Total_Value) * 100) %>% 
+  rename(Total_Distance = Total_Value) %>% 
+  mutate(Types = c("Short distance", "Moderate distance", "Very short distance", "Long distance"))
+```
+
+Lets make a pie chart
+
+```{r}
+ggplot(user_category, aes(x = "", y = Total_Distance, fill = Types)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(Percentage, 2), "%")), position = position_stack(vjust = 0.5)) +
+  coord_polar(theta = "y") +
+  theme_void() +
+  labs(title = "User type distribution")
+```
+
+
+We can see that this data also cover for the same idea from previous analysis that a large portion of calories or distance actually came from short distance movement. It can be from walking around their home, work place. So it will be beneficial if Bellabeat design the product not solely for exercising, but also focusing on other functions and appearance to be suitable anytime.
+
+### Amount of time of movement
+Similar with finding out the main user type, but this time, we work with the time data.
+Firstly, I create a new data frame to separate the time columns, then convert to long data.
+
+```{r}
+minute_long <- summary_daily_activity %>%
+  select(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, SedentaryMinutes) %>% 
+  pivot_longer(cols = c(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, SedentaryMinutes), names_to = "Group", values_to = "Time")
+```
+
+Then using boxplot to see the difference
+
+```{r}
+ggplot(data = minute_long) +
+  geom_boxplot(mapping = aes(x = Group, y = Time), fill = 'orange')  +
+  labs(title = "Active Time Comparison")
+```
+Combine with previous conclusion, the big portion of movement is short and happened when users didnt move much, potentially when at work or at home.
+
+## Analysis 2: Relationship between health and smart device usage
+From [Body Mass Index (BMI) Calculator](https://www.diabetes.ca/en-CA/resources/tools---resources/body-mass-index-(bmi)-calculator#:~:text=Body%20Mass%20Index%20is%20a,most%20adults%2018%2D65%20years.), we can identify user body type based on their BMI in 'customer_weight' data frame.
+
+```{r}
+customer_weight <- customer_weight %>% 
+  mutate(
+  body_type = ifelse(BMI < 18.5, "Underweight",
+                      ifelse(BMI < 24.9, "Healthy",
+                              ifelse(BMI < 29.9, "Overweight", "Obesity")))
+  )
+```
+
+Then, we can find out who would be the main buyers for smart devices that can track their health, but first we need to find out the proportion for each category.
+
+```{r}
+proportions <- data.frame(table(customer_weight$body_type) / nrow(customer_weight)) %>% 
+  mutate(percentage = Freq * 100) %>% 
+  rename("User_Body_Type" = Freq)
+```
+
+Now we can draw pie chart to best show case the difference.
+
+```{r}
+ggplot(data = proportions, aes(x = "", y = User_Body_Type, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  coord_polar(theta = "y") + 
+  labs(fill = "Body Type") + 
+  scale_fill_manual(values = c("Healthy" = "green", "Obesity" = "purple", "Overweight" = "red", "Underweight" = "yellow")) +
+  theme_minimal() + 
+  geom_text(aes(label = paste0(round(percentage, 2), "%")), position = position_stack(vjust = 0.5))
+```
+
+We can see that up to 98% of buyers are either healthy, or overweight. Only a small fraction is from people who are underweight or obese.
+
+## Analysis 3: Sleeping habit
+
+For easier to interpret and better visualization, I would like to convert from minutes to hours, and add a column of day in a week
+
+```{r}
+daily_sleep <- daily_sleep %>% 
+  mutate(time_to_sleep = TotalTimeInBed - TotalMinutesAsleep) %>% 
+  mutate(day_in_week = weekdays(mdy_hms(SleepDay))) %>% 
+  mutate(sleep_time = TotalMinutesAsleep/60) %>% 
+  mutate(time_on_bed = TotalTimeInBed/60)
+```
+```{r}
+glimpse(daily_sleep)
+```
+
+To make sure the chart will be in the right order Monday to Sunday.
+
+```{r}
+desired_order <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+daily_sleep$day_in_week <- factor(daily_sleep$day_in_week, levels = desired_order)
+```
+
+
+### Comparing sleeping time and time on bed
+
+```{r}
+ggplot(data = daily_sleep) +
+  geom_violin(mapping = aes(x = day_in_week, y = time_on_bed, fill = "Time on Bed"), scale = "width", width = 0.8, position = position_dodge(width = 0.8)) +
+  geom_boxplot(mapping = aes(x = day_in_week, y = sleep_time, fill = "Sleep Time"), position = position_dodge(width = 0.5), width = 0.2) +
+  labs(title = "Comparison of Sleep Time and Time on Bed by Day", x = "Day of the week", y = "Hours", fill = "Measurement types") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Time on Bed" = "orange", "Sleep Time" = "green")) 
+```
+We can see that customer spend on average 10-11 hours on bed on Sunday, and only 7-8 hours in there for sleeping, which is about the same compare with any other days in a week. There a bigger gap between time on bed and sleep time from Friday to Monday.
+With this insight, company can consider build application attached with smart devices to help customer to relax, and get better sleeping result.
+
+### Sleeping pattern trend overtime
+
+```{r}
+ggplot(data = daily_sleep, aes(x = day_in_week, y = sleep_time)) +
+  geom_boxplot(fill = "yellow") +
+  labs(title = "Sleep Pattern Trends Over Time", x = "Recorded Day", y = "Sleep Time (Minutes)") +
+  theme_minimal()
+```
+Although sleeping time's mean is around 7-8 hours, with exception on Sunday of around 10 hours, the majority of sleeping time distributes at lower quantile, most people sleep less than recommended time.
+
+### Average sleep time by day of the week
+
+```{r}
+ggplot(data = daily_sleep) +
+  geom_bar(mapping = aes(x = day_in_week, y = sleep_time, fill = day_in_week), stat = "summary", fun = "mean") +
+  labs(title = "Average Sleep Time by Day of the Week", x = "Day of the Week", y = "Average Sleep Time (Minutes)")
+```
+Average sleeping time is higher on Wednesday and Sunday, this can because of tiredness from previous day, which can be from working or going out, so company can consider running promotions and advertisement on the day they spend less time to sleep, especially Friday and Saturday.
+
+### Sleep time distribution
+
+```{r}
+ggplot(data = daily_sleep, aes(x = TotalMinutesAsleep, fill = ..count..)) +
+  geom_histogram(binwidth = 30, color = "black") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Distribution of Sleep Time", x = "Sleep Time (Minutes)", y = "Frequency") +
+  theme_minimal()
+```
+
+We can see that, yet the sleeping time median is still at around 7 hours/day, but the distribution shape has longer and fatter tail on the left, which is less than 7 hours.
+
+# Summary
+## Findings
+* Customers most active on Thursday, Tuesday and Wednesday.
+
+* The calories burned per step will start to decline after average of 25000 steps.
+
+* A large portion of calories burned or distance actually came from short distance movement.
+
+* Most of recorded distance is from short distance movement, potentially when at work or at home.
+
+* Up to 98% of buyers are either healthy, or overweight. Only a small fraction is from buyers who are underweight or obese.
+
+* Customers spend on average 10-11 hours on bed on Sunday, and only 7-8 hours in there for sleeping, which is about the same compare with any other days in a week. There a bigger gap between time on bed and sleep time from Friday to Monday.
+
+* Most people sleep less than 7-8 hours a day.
+
+## Recommendations
+* Bellabeat should consider focusing promotions and advertisement on Friday and Saturday, and avoid from Tuesday to Wednesday, as the buyers are busier at work or home.
+
+* Product design should consider adding apps that support people to get better sleep, and with more appealing appearance.
+
+* Ads and promotions should focus more on others who are either underweight or obese, as from Fitbit's data, they were unable to attract this two types of customers.
+
+
+
+
+
